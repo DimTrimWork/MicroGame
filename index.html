@@ -24,15 +24,15 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Добавлен таймер: 0.5 сек без тапа → рекорд и сброс вниз
+// Добавлено: при достижении максимума — "Отличный результат, 028!" и конец игры
 
-const BASE_TARGET_BOOST = 0.025;
-const BOOST_REDUCTION = 0.004;
-const FALL_SPEED = 0.09;
+const BASE_TARGET_BOOST = 0.02;
+const BOOST_REDUCTION = 0.005;
+const FALL_SPEED = 0.1;
 const EASE_FACTOR = 0.15;
 const SHAKE_AMOUNT = 4;
 const SHAKE_SPEED = 1;
-const TAP_TIMEOUT = 0.32; // секунды без тапа → конец игры
+const TAP_TIMEOUT = 1.4; // секунды без тапа → конец игры
 const BOTTOM_OFFSET = 0.02;
 const TOP_OFFSET = 0.01;
 const MAX_SCORE = 1000000;
@@ -52,9 +52,10 @@ let targetPos = 0;
 let shakeTime = 0;
 let score = 0;
 let gameOver = false;
+let maxReached = false; // флаг достижения максимума
 let charSize = 0;
 let playableHeight = 0;
-let lastTapTime = 0; // время последнего тапа
+let lastTapTime = 0;
 
 function resize() {
   c.width = window.innerWidth;
@@ -92,12 +93,13 @@ function tap(e) {
     currentPos = targetPos = 0;
     score = 0;
     gameOver = false;
+    maxReached = false;
   } else {
     const boost = BASE_TARGET_BOOST - BOOST_REDUCTION * targetPos;
     targetPos = Math.min(targetPos + boost, 1);
     shakeTime = 0;
   }
-  lastTapTime = performance.now() / 1000; // обновляем время тапа
+  lastTapTime = performance.now() / 1000;
 }
 
 c.onclick = tap;
@@ -135,19 +137,25 @@ function loop(time) {
 
     targetPos = Math.max(targetPos - FALL_SPEED * dt, 0);
 
-    // Тряска только во время активных тапов (последний тап < 0.5 сек назад)
     if (currentTime - lastTapTime < TAP_TIMEOUT) {
       shakeTime += dt * SHAKE_SPEED;
     } else {
       shakeTime = 0;
     }
 
-    // Таймер: если прошло >0.5 сек без тапа — конец игры
+    // Таймаут без тапа
     if (currentTime - lastTapTime > TAP_TIMEOUT && score > 0) {
       gameOver = true;
       saveRecords();
-      // Сброс вниз
       targetPos = 0;
+    }
+
+    // Достижение максимума
+    if (currentPos >= 0.999 && !maxReached) {
+      maxReached = true;
+      gameOver = true;
+      saveRecords();
+      targetPos = 1; // фиксируем наверху
     }
 
     score = Math.round(currentPos * MAX_SCORE);
@@ -170,10 +178,16 @@ function loop(time) {
 
   if (gameOver) {
     ctx.fillStyle = "rgba(255,255,255,0.8)";
-    ctx.fillRect(0, c.height / 2 - 60, c.width, 120);
+    ctx.fillRect(0, c.height / 2 - 80, c.width, 160);
+
     ctx.fillStyle = "#000";
-    ctx.font = "bold 28px sans-serif";
-    ctx.fillText("Игра окончена", c.width / 2, c.height / 2 - 10);
+    ctx.font = "bold 32px sans-serif";
+    if (maxReached) {
+      ctx.fillText("Отличный результат, 028!", c.width / 2, c.height / 2 - 20);
+    } else {
+      ctx.fillText("Игра окончена", c.width / 2, c.height / 2 - 20);
+    }
+
     ctx.font = "24px sans-serif";
     ctx.fillText("Тапните для рестарта", c.width / 2, c.height / 2 + 30);
   }
@@ -194,6 +208,3 @@ showRecords();
 </script>
 </body>
 </html>
-
-
-
