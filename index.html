@@ -25,12 +25,12 @@ li{margin:2px 0;}
 
 <script>
 // Константы баланса
-const FIXED_BOOST = 8;                  // фиксированный импульс за каждый тап
-const BASE_GRAVITY = 0.5;               // базовая гравитация внизу
-const MAX_GRAVITY = 1.5;                  // максимальная гравитация наверху
-const BOTTOM_OFFSET = 0.0;              // отступ снизу (доля высоты экрана)
-const TOP_OFFSET = 0.0;                 // отступ сверху (доля высоты экрана)
-const MAX_SCORE = 1000000;              // максимальный счёт
+const MAX_BOOST = 5;                   // максимальный импульс за тап внизу
+const MIN_BOOST = 0.5;                 // минимальный импульс за тап наверху
+const DOWNWARD_DRIFT = 0.3;            // постоянное смещение вниз (имитация гравитации)
+const BOTTOM_OFFSET = 0.0;             // отступ снизу (доля высоты экрана)
+const TOP_OFFSET = 0.0;                // отступ сверху (доля высоты экрана)
+const MAX_SCORE = 1000000;             // максимальный счёт
 
 // Изображения
 const bgImg = new Image();
@@ -44,7 +44,6 @@ const ctx = c.getContext("2d");
 const list = document.getElementById("list");
 
 let position = 0;      // 0 = низ, 1 = верх игровой зоны
-let velocity = 0;
 let score = 0;
 let gameOver = false;
 let charSize = 0;      // будет вычисляться каждый кадр
@@ -62,7 +61,7 @@ localStorage.removeItem("liftRecords");
 let records = [];
 function showRecords() {
   list.innerHTML = "";
-  records.slice(0,10).forEach(r => {
+  records.slice(0, 10).forEach(r => {
     const li = document.createElement("li");
     li.textContent = (r/1000).toFixed(0) + "к";
     list.appendChild(li);
@@ -72,8 +71,8 @@ function showRecords() {
 function saveRecords() {
   if (score > 0) {
     records.push(score);
-    records.sort((a,b) => b - a);
-    records = records.slice(0,10);
+    records.sort((a, b) => b - a);
+    records = records.slice(0, 10);
     localStorage.setItem("liftRecords", JSON.stringify(records));
     showRecords();
   }
@@ -83,11 +82,12 @@ function tap(e) {
   e.preventDefault();
   if (gameOver) {
     position = 0;
-    velocity = 0;
     score = 0;
     gameOver = false;
   } else {
-    velocity += FIXED_BOOST;
+    // Импульс уменьшается линейно от MAX_BOOST до MIN_BOOST по мере подъёма
+    const boost = MAX_BOOST - (MAX_BOOST - MIN_BOOST) * position;
+    position += boost / c.height; // нормализуем под высоту экрана
   }
 }
 
@@ -114,17 +114,15 @@ function loop() {
     ctx.drawImage(bgImg, bx, by, bw, bh);
   }
 
-  // Размер персонажа (вычисляем каждый кадр для адаптивности)
+  // Размер персонажа
   charSize = Math.min(c.width * 0.25, c.height * 0.25);
 
   if (!gameOver) {
-    const currentGravity = BASE_GRAVITY + (MAX_GRAVITY - BASE_GRAVITY) * position;
-    velocity -= currentGravity;
-    position += velocity * 0.016;  // стабильная дельта времени ≈60fps
+    // Постоянное смещение вниз (имитация гравитации)
+    position -= DOWNWARD_DRIFT * 0.016; // стабильная дельта времени ≈60fps
 
     if (position < 0) {
       position = 0;
-      velocity = 0;
       if (score > 0) {
         gameOver = true;
         saveRecords();
@@ -132,7 +130,6 @@ function loop() {
     }
     if (position > 1) {
       position = 1;
-      velocity = Math.min(velocity, 0); // не даём вылететь вверх
     }
 
     score = Math.round(position * MAX_SCORE);
@@ -142,7 +139,7 @@ function loop() {
   const playableHeight = c.height * (1 - BOTTOM_OFFSET - TOP_OFFSET);
   const y = c.height - BOTTOM_OFFSET * c.height - position * playableHeight - charSize;
 
-  // Рисуем персонажа (только если загружен)
+  // Рисуем персонажа
   if (charImg.complete) {
     const x = c.width / 2 - charSize / 2;
     ctx.drawImage(charImg, x, y, charSize, charSize);
@@ -168,7 +165,6 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// Запуск цикла после загрузки изображений
 function startIfReady() {
   if (bgImg.complete && charImg.complete) {
     loop();
@@ -178,11 +174,7 @@ bgImg.onload = startIfReady;
 charImg.onload = startIfReady;
 if (bgImg.complete && charImg.complete) startIfReady();
 
-// Показываем пустой список рекордов (они сброшены)
 showRecords();
 </script>
 </body>
 </html>
-
-
-
