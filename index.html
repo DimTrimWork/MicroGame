@@ -24,8 +24,6 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Текущие очки перенесены в верхний левый угол, шрифт уменьшен
-
 const BASE_TARGET_BOOST = 0.02;
 const BOOST_REDUCTION = 0.009;
 const FALL_SPEED = 0.075;
@@ -167,22 +165,26 @@ function loop(time) {
     ctx.drawImage(charImg, x, y, charSize, charSize);
   }
 
-  // Очки в левом верхнем углу
+  // Очки слева сверху
   ctx.fillStyle = "#000";
-  ctx.font = "bold 24px sans-serif"; // уменьшенный шрифт
+  ctx.font = "bold 24px sans-serif";
   ctx.textAlign = "left";
   ctx.fillText(score.toLocaleString() + " очков", 20, 40);
 
+  // Экран окончания — строго по центру
   if (gameOver) {
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
-    ctx.fillRect(0, c.height / 2 - 80, c.width, 160);
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillRect(c.width * 0.1, c.height / 2 - 100, c.width * 0.8, 200);
+
     ctx.fillStyle = "#000";
+    ctx.textAlign = "center";
     ctx.font = "bold 32px sans-serif";
     if (maxReached) {
-      ctx.fillText("Отличный результат, 028!", c.width / 2, c.height / 2 - 20);
+      ctx.fillText("Отличный результат, 028!", c.width / 2, c.height / 2 - 30);
     } else {
-      ctx.fillText("Испытание окончено", c.width / 2, c.height / 2 - 20);
+      ctx.fillText("Испытание окончено", c.width / 2, c.height / 2 - 30);
     }
+
     ctx.font = "24px sans-serif";
     ctx.fillText("Нажми для начала", c.width / 2, c.height / 2 + 30);
   }
