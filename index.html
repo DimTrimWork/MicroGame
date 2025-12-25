@@ -25,12 +25,12 @@ li{margin:2px 0;}
 
 <script>
 // Константы баланса
-const FIXED_BOOST = 2;                 // фиксированный импульс за каждый тап
+const FIXED_BOOST = 2;                  // фиксированный импульс за каждый тап
 const BASE_GRAVITY = 0.3;               // базовая гравитация внизу
-const MAX_GRAVITY = 2;                // максимальная гравитация наверху
-const BOTTOM_OFFSET = 0.0;              // отступ снизу (доля высоты экрана, где персонаж стартует)
-const TOP_OFFSET = 0.0;                 // отступ сверху (доля высоты экрана, где максимум)
-const MAX_SCORE = 1000000;              // очков за достижение верха отрезка
+const MAX_GRAVITY = 2;                  // максимальная гравитация наверху
+const BOTTOM_OFFSET = 0.0;              // отступ снизу (доля высоты экрана)
+const TOP_OFFSET = 0.0;                 // отступ сверху (доля высоты экрана)
+const MAX_SCORE = 1000000;              // максимальный счёт
 
 // Изображения
 const bgImg = new Image();
@@ -43,10 +43,11 @@ const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 const list = document.getElementById("list");
 
-let position = 0;       // 0 = низ отрезка, 1 = верх отрезка
+let position = 0;      // 0 = низ, 1 = верх игровой зоны
 let velocity = 0;
 let score = 0;
 let gameOver = false;
+let charSize = 0;      // будет вычисляться каждый кадр
 
 function resize() {
   c.width = window.innerWidth;
@@ -55,22 +56,10 @@ function resize() {
 window.onresize = resize;
 resize();
 
-// Вычисляем реальные координаты
-function getY() {
-  const playableHeight = c.height * (1 - BOTTOM_OFFSET - TOP_OFFSET);
-  return c.height - BOTTOM_OFFSET * c.height - position * playableHeight - charSize;
-}
+// Сброс рекордов при каждом запуске страницы
+localStorage.removeItem("liftRecords");
 
 let records = [];
-function loadRecords() {
-  const rec = localStorage.getItem("liftRecords");
-  if (rec) {
-    records = JSON.parse(rec);
-    showRecords();
-  }
-}
-loadRecords();
-
 function showRecords() {
   list.innerHTML = "";
   records.slice(0,10).forEach(r => {
@@ -83,7 +72,7 @@ function showRecords() {
 function saveRecords() {
   if (score > 0) {
     records.push(score);
-    records.sort((a,b)=>b-a);
+    records.sort((a,b) => b - a);
     records = records.slice(0,10);
     localStorage.setItem("liftRecords", JSON.stringify(records));
     showRecords();
@@ -93,7 +82,10 @@ function saveRecords() {
 function tap(e) {
   e.preventDefault();
   if (gameOver) {
-    position = 0; velocity = 0; score = 0; gameOver = false;
+    position = 0;
+    velocity = 0;
+    score = 0;
+    gameOver = false;
   } else {
     velocity += FIXED_BOOST;
   }
@@ -103,29 +95,33 @@ c.onclick = tap;
 c.ontouchstart = tap;
 
 function loop() {
-  ctx.clearRect(0,0,c.width,c.height);
-  
-  // Фон центрирован
-  const bgRatio = bgImg.naturalWidth / bgImg.naturalHeight || 1;
-  const canvasRatio = c.width / c.height;
-  let bw, bh, bx = 0, by = 0;
-  if (bgRatio > canvasRatio) {
-    bw = c.width;
-    bh = c.width / bgRatio;
-    by = (c.height - bh) / 2;
-  } else {
-    bh = c.height;
-    bw = c.height * bgRatio;
-    bx = (c.width - bw) / 2;
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  // Рисуем фон (центрированный)
+  if (bgImg.complete) {
+    const bgRatio = bgImg.naturalWidth / bgImg.naturalHeight || 1;
+    const canvasRatio = c.width / c.height;
+    let bw, bh, bx = 0, by = 0;
+    if (bgRatio > canvasRatio) {
+      bw = c.width;
+      bh = c.width / bgRatio;
+      by = (c.height - bh) / 2;
+    } else {
+      bh = c.height;
+      bw = c.height * bgRatio;
+      bx = (c.width - bw) / 2;
+    }
+    ctx.drawImage(bgImg, bx, by, bw, bh);
   }
-  ctx.drawImage(bgImg, bx, by, bw, bh);
-  
+
+  // Размер персонажа (вычисляем каждый кадр для адаптивности)
+  charSize = Math.min(c.width * 0.25, c.height * 0.25);
+
   if (!gameOver) {
-    // Гравитация растёт линейно от BASE_GRAVITY до MAX_GRAVITY по мере подъёма
     const currentGravity = BASE_GRAVITY + (MAX_GRAVITY - BASE_GRAVITY) * position;
     velocity -= currentGravity;
-    position += velocity / c.height;   // нормализуем скорость под высоту экрана
-    
+    position += velocity * 0.016;  // стабильная дельта времени ≈60fps
+
     if (position < 0) {
       position = 0;
       velocity = 0;
@@ -134,47 +130,56 @@ function loop() {
         saveRecords();
       }
     }
-    if (position > 1) position = 1;   // не вылететь за верх
-    
+    if (position > 1) {
+      position = 1;
+      velocity = Math.min(velocity, 0); // не даём вылететь вверх
+    }
+
     score = Math.round(position * MAX_SCORE);
   }
-  
-  // Персонаж
-  const charSize = Math.min(c.width * 0.25, c.height * 0.25);
-  const x = c.width / 2 - charSize / 2;
-  const y = getY();
-  ctx.drawImage(charImg, x, y, charSize, charSize);
-  
-  // Счёт
+
+  // Позиция персонажа
+  const playableHeight = c.height * (1 - BOTTOM_OFFSET - TOP_OFFSET);
+  const y = c.height - BOTTOM_OFFSET * c.height - position * playableHeight - charSize;
+
+  // Рисуем персонажа (только если загружен)
+  if (charImg.complete) {
+    const x = c.width / 2 - charSize / 2;
+    ctx.drawImage(charImg, x, y, charSize, charSize);
+  }
+
+  // Текущий счёт
   ctx.fillStyle = "#000";
   ctx.font = "bold 30px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(score.toLocaleString() + " очков", c.width/2, 60);
-  
+  ctx.fillText(score.toLocaleString() + " очков", c.width / 2, 60);
+
+  // Экран окончания игры
   if (gameOver) {
     ctx.fillStyle = "rgba(255,255,255,0.8)";
-    ctx.fillRect(0, c.height/2 - 60, c.width, 120);
+    ctx.fillRect(0, c.height / 2 - 60, c.width, 120);
     ctx.fillStyle = "#000";
     ctx.font = "bold 28px sans-serif";
-    ctx.fillText("Игра окончена", c.width/2, c.height/2 - 10);
+    ctx.fillText("Игра окончена", c.width / 2, c.height / 2 - 10);
     ctx.font = "24px sans-serif";
-    ctx.fillText("Тапните для рестарта", c.width/2, c.height/2 + 30);
+    ctx.fillText("Тапните для рестарта", c.width / 2, c.height / 2 + 30);
   }
-  
+
   requestAnimationFrame(loop);
 }
 
-function startLoop() {
-  if (bgImg.complete && charImg.complete) loop();
+// Запуск цикла после загрузки изображений
+function startIfReady() {
+  if (bgImg.complete && charImg.complete) {
+    loop();
+  }
 }
-bgImg.onload = startLoop;
-charImg.onload = startLoop;
-if (bgImg.complete && charImg.complete) startLoop();
+bgImg.onload = startIfReady;
+charImg.onload = startIfReady;
+if (bgImg.complete && charImg.complete) startIfReady();
 
+// Показываем пустой список рекордов (они сброшены)
 showRecords();
 </script>
 </body>
 </html>
-
-
-
