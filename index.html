@@ -24,15 +24,18 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Простейшая версия: тап поднимает объект вверх на фиксированное расстояние
-// Нет гравитации, сопротивления, инерции — только прямое поднятие
+// Нормализованная логика (position 0–1) с плавной анимацией, кривыми и эффектами
 
-const BOOST_PER_TAP = 95;              // сколько пикселей поднимается за один тап
-const BOTTOM_OFFSET = 0.02;            // отступ снизу (2%)
-const TOP_OFFSET = 0.01;               // отступ сверху (1%)
+const BASE_TARGET_BOOST = 0.12;        // базовое поднятие цели за тап
+const BOOST_REDUCTION = 0.08;          // уменьшение boost с высотой (на верху ~0.04)
+const FALL_SPEED = 0.003;              // скорость падения цели, если не тапать
+const EASE_FACTOR = 0.12;              // скорость сближения текущей позиции с целью (плавность)
+const SHAKE_AMOUNT = 4;                // амплитуда дрожания при подъёме
+const SHAKE_SPEED = 0.3;               // скорость дрожания
+const BOTTOM_OFFSET = 0.02;
+const TOP_OFFSET = 0.01;
 const MAX_SCORE = 1000000;
 
-// Изображения
 const bgImg = new Image();
 bgImg.src = "bg.png";
 
@@ -43,7 +46,9 @@ const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 const list = document.getElementById("list");
 
-let height = 0;        // текущая высота в пикселях от низа игровой зоны
+let currentPos = 0;     // текущая анимированная позиция (0–1)
+let targetPos = 0;      // целевая позиция
+let shakeTime = 0;      // для дрожания
 let score = 0;
 let gameOver = false;
 let charSize = 0;
@@ -82,22 +87,25 @@ function saveRecords() {
 function tap(e) {
   e.preventDefault();
   if (gameOver) {
-    height = 0;
+    currentPos = targetPos = 0;
     score = 0;
     gameOver = false;
   } else {
-    height += BOOST_PER_TAP;
-    if (height > playableHeight) {
-      height = playableHeight;
-    }
-    score = Math.round((height / playableHeight) * MAX_SCORE);
+    // Уменьшение импульса с высотой
+    const boost = BASE_TARGET_BOOST - BOOST_REDUCTION * targetPos;
+    targetPos = Math.min(targetPos + boost, 1);
+    shakeTime = 0; // запуск дрожания
   }
 }
 
 c.onclick = tap;
 c.ontouchstart = tap;
 
-function loop() {
+let lastTime = performance.now();
+function loop(time) {
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+
   ctx.clearRect(0, 0, c.width, c.height);
 
   // Фон
@@ -119,20 +127,39 @@ function loop() {
 
   charSize = Math.min(c.width * 0.25, c.height * 0.25);
 
-  // Если не тапать — объект остаётся на месте (нет падения)
-  if (!gameOver && height <= 0) {
-    height = 0;
+  if (!gameOver) {
+    // Плавное сближение с целью (ease)
+    currentPos += (targetPos - currentPos) * EASE_FACTOR;
+
+    // Если не тапать — цель медленно падает
+    if (targetPos > currentPos + 0.001) {
+      shakeTime += dt * SHAKE_SPEED;
+    } else {
+      targetPos = Math.max(targetPos - FALL_SPEED * dt, currentPos);
+      shakeTime = 0;
+    }
+
+    // Окончание игры при падении на низ
+    if (currentPos < 0.01 && targetPos < 0.01 && score > 0) {
+      gameOver = true;
+      saveRecords();
+    }
+
+    score = Math.round(currentPos * MAX_SCORE);
   }
 
-  // Y персонажа
-  const y = c.height - BOTTOM_OFFSET * c.height - height - charSize;
+  // Дрожание при подъёме
+  const shakeX = (targetPos > currentPos + 0.001) ? Math.sin(shakeTime * 50) * SHAKE_AMOUNT : 0;
+  const shakeY = (targetPos > currentPos + 0.001) ? Math.cos(shakeTime * 60) * SHAKE_AMOUNT * 0.5 : 0;
+
+  // Y позиции
+  const y = c.height - BOTTOM_OFFSET * c.height - currentPos * playableHeight - charSize + shakeY;
 
   if (charImg.complete) {
-    const x = c.width / 2 - charSize / 2;
+    const x = c.width / 2 - charSize / 2 + shakeX;
     ctx.drawImage(charImg, x, y, charSize, charSize);
   }
 
-  // Счёт
   ctx.fillStyle = "#000";
   ctx.font = "bold 30px sans-serif";
   ctx.textAlign = "center";
@@ -152,7 +179,9 @@ function loop() {
 }
 
 function startIfReady() {
-  if (bgImg.complete && charImg.complete) loop();
+  if (bgImg.complete && charImg.complete) {
+    requestAnimationFrame(loop);
+  }
 }
 bgImg.onload = startIfReady;
 charImg.onload = startIfReady;
@@ -162,5 +191,3 @@ showRecords();
 </script>
 </body>
 </html>
-
-
