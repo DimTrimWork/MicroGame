@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -25,14 +24,15 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Исправленная версия: объект снижается и игра заканчивается с сохранением рекорда
+// Добавлен таймер: 0.5 сек без тапа → рекорд и сброс вниз
 
-const BASE_TARGET_BOOST = 0.08;        // базовое поднятие цели за тап
-const BOOST_REDUCTION = 0.06;          // уменьшение boost с высотой
-const FALL_SPEED = 0.08;               // скорость падения цели, если не тапать
-const EASE_FACTOR = 0.12;              // скорость сближения (плавность)
-const SHAKE_AMOUNT = 4;                // амплитуда дрожания
-const SHAKE_SPEED = 1;                 // скорость дрожания
+const BASE_TARGET_BOOST = 0.08;
+const BOOST_REDUCTION = 0.06;
+const FALL_SPEED = 0.08;
+const EASE_FACTOR = 0.12;
+const SHAKE_AMOUNT = 4;
+const SHAKE_SPEED = 1;
+const TAP_TIMEOUT = 0.5; // секунды без тапа → конец игры
 const BOTTOM_OFFSET = 0.02;
 const TOP_OFFSET = 0.01;
 const MAX_SCORE = 1000000;
@@ -47,13 +47,14 @@ const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 const list = document.getElementById("list");
 
-let currentPos = 0;     // текущая позиция (0–1)
-let targetPos = 0;      // целевая позиция
+let currentPos = 0;
+let targetPos = 0;
 let shakeTime = 0;
 let score = 0;
 let gameOver = false;
 let charSize = 0;
 let playableHeight = 0;
+let lastTapTime = 0; // время последнего тапа
 
 function resize() {
   c.width = window.innerWidth;
@@ -96,6 +97,7 @@ function tap(e) {
     targetPos = Math.min(targetPos + boost, 1);
     shakeTime = 0;
   }
+  lastTapTime = performance.now() / 1000; // обновляем время тапа
 }
 
 c.onclick = tap;
@@ -103,6 +105,7 @@ c.ontouchstart = tap;
 
 let lastTime = performance.now();
 function loop(time) {
+  const currentTime = time / 1000;
   const dt = (time - lastTime) / 1000;
   lastTime = time;
 
@@ -128,31 +131,30 @@ function loop(time) {
   charSize = Math.min(c.width * 0.25, c.height * 0.25);
 
   if (!gameOver) {
-    // Плавное следование за целью
     currentPos += (targetPos - currentPos) * EASE_FACTOR;
 
-    // Постоянное падение цели, если не поднимаем
     targetPos = Math.max(targetPos - FALL_SPEED * dt, 0);
 
-    // Дрожание только при активном подъёме
-    if (targetPos > currentPos + 0.001) {
+    // Тряска только во время активных тапов (последний тап < 0.5 сек назад)
+    if (currentTime - lastTapTime < TAP_TIMEOUT) {
       shakeTime += dt * SHAKE_SPEED;
     } else {
       shakeTime = 0;
     }
 
-    // Game Over при достижении низа
-    if (currentPos <= 0 && score > 0) {
+    // Таймер: если прошло >0.5 сек без тапа — конец игры
+    if (currentTime - lastTapTime > TAP_TIMEOUT && score > 0) {
       gameOver = true;
       saveRecords();
+      // Сброс вниз
+      targetPos = 0;
     }
 
     score = Math.round(currentPos * MAX_SCORE);
   }
 
-  // Дрожание
-  const shakeX = (targetPos > currentPos + 0.001) ? Math.sin(shakeTime * 50) * SHAKE_AMOUNT : 0;
-  const shakeY = (targetPos > currentPos + 0.001) ? Math.cos(shakeTime * 60) * SHAKE_AMOUNT * 0.5 : 0;
+  const shakeX = (currentTime - lastTapTime < TAP_TIMEOUT) ? Math.sin(shakeTime * 50) * SHAKE_AMOUNT : 0;
+  const shakeY = (currentTime - lastTapTime < TAP_TIMEOUT) ? Math.cos(shakeTime * 60) * SHAKE_AMOUNT * 0.5 : 0;
 
   const y = c.height - BOTTOM_OFFSET * c.height - currentPos * playableHeight - charSize + shakeY;
 
@@ -192,12 +194,3 @@ showRecords();
 </script>
 </body>
 </html>
-```
-
-### Исправления:
-- **Снижение**: теперь цель постоянно падает (`targetPos -= FALL_SPEED * dt`), даже при подъёме, но тапы компенсируют это.
-- **Game Over**: срабатывает, когда `currentPos <= 0` (достиг низа) и был набран счёт. Рекорд сохраняется.
-- **Баланс**: увеличил `BASE_TARGET_BOOST` до 0.08 и `FALL_SPEED` до 0.08 — объект поднимается и медленно снижается без тапов.
-- **Дрожание**: работает только при активном подъёме.
-
-Теперь всё работает корректно: объект снижается при бездействии, игра заканчивается на дне с сохранением рекорда.
