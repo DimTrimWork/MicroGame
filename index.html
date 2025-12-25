@@ -25,9 +25,9 @@ li{margin:2px 0;}
 
 <script>
 // Константы баланса (казуальный и правдоподобный)
-const BASE_BOOST = 18;                 // базовый импульс вверх за тап (внизу)
+const BASE_BOOST = 50;                 // базовый импульс вверх за тап (внизу)
 const BOOST_REDUCTION_FACTOR = 0.8;    // коэффициент уменьшения импульса на высоте (0.8 = импульс падает до 20% на верху)
-const GRAVITY_BASE = 0.4;              // базовая гравитация
+const GRAVITY_BASE = 0.25;              // базовая гравитация
 const GRAVITY_INCREASE = 1.2;          // гравитация растёт до (BASE + INCREASE) на верху
 const AIR_RESISTANCE = 0.02;           // сопротивление воздуха (замедляет скорость)
 const BOTTOM_OFFSET = 0.05;            // отступ снизу (5%)
@@ -193,3 +193,4 @@ showRecords();
 </script>
 </body>
 </html>
+
