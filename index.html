@@ -26,12 +26,12 @@ li{margin:2px 0;}
 <script>
 // Нормализованная логика (position 0–1) с плавной анимацией, кривыми и эффектами
 
-const BASE_TARGET_BOOST = 0.07;        // базовое поднятие цели за тап
-const BOOST_REDUCTION = 0.02;          // уменьшение boost с высотой (на верху ~0.04)
-const FALL_SPEED = 0.08;              // скорость падения цели, если не тапать
-const EASE_FACTOR = 0.12;              // скорость сближения текущей позиции с целью (плавность)
+const BASE_TARGET_BOOST = 0.02;        // базовое поднятие цели за тап
+const BOOST_REDUCTION = 0.08;          // уменьшение boost с высотой (на верху ~0.04)
+const FALL_SPEED = 0.1;              // скорость падения цели, если не тапать
+const EASE_FACTOR = 0.08;              // скорость сближения текущей позиции с целью (плавность)
 const SHAKE_AMOUNT = 4;                // амплитуда дрожания при подъёме
-const SHAKE_SPEED = 0.3;               // скорость дрожания
+const SHAKE_SPEED = 1;               // скорость дрожания
 const BOTTOM_OFFSET = 0.02;
 const TOP_OFFSET = 0.01;
 const MAX_SCORE = 1000000;
@@ -191,4 +191,5 @@ showRecords();
 </script>
 </body>
 </html>
+
 
