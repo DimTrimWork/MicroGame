@@ -24,14 +24,12 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Новый казуальный баланс (персонаж легко поднимается)
-const BASE_BOOST = 28;                 // сильный импульс внизу
-const BOOST_REDUCTION_FACTOR = 0.7;    // импульс падает до 30% наверху
-const GRAVITY_BASE = 0.15;             // слабая базовая гравитация
-const GRAVITY_INCREASE = 0.6;          // гравитация растёт слабо
-const AIR_RESISTANCE = 0.01;           // лёгкое сопротивление воздуха
-const BOTTOM_OFFSET = 0.02;            // отступ снизу ~2%
-const TOP_OFFSET = 0.01;               // отступ сверху ~1%
+// Простейшая версия: тап поднимает объект вверх на фиксированное расстояние
+// Нет гравитации, сопротивления, инерции — только прямое поднятие
+
+const BOOST_PER_TAP = 80;              // сколько пикселей поднимается за один тап
+const BOTTOM_OFFSET = 0.02;            // отступ снизу (2%)
+const TOP_OFFSET = 0.01;               // отступ сверху (1%)
 const MAX_SCORE = 1000000;
 
 // Изображения
@@ -45,8 +43,7 @@ const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 const list = document.getElementById("list");
 
-let height = 0;        // высота в пикселях от низа зоны
-let velocity = 0;      // скорость (положительная — вверх)
+let height = 0;        // текущая высота в пикселях от низа игровой зоны
 let score = 0;
 let gameOver = false;
 let charSize = 0;
@@ -86,24 +83,21 @@ function tap(e) {
   e.preventDefault();
   if (gameOver) {
     height = 0;
-    velocity = 0;
     score = 0;
     gameOver = false;
   } else {
-    const progress = height / playableHeight;
-    const boost = BASE_BOOST * (1 - BOOST_REDUCTION_FACTOR * progress);
-    velocity += boost;
+    height += BOOST_PER_TAP;
+    if (height > playableHeight) {
+      height = playableHeight;
+    }
+    score = Math.round((height / playableHeight) * MAX_SCORE);
   }
 }
 
 c.onclick = tap;
 c.ontouchstart = tap;
 
-let lastTime = performance.now();
-function loop(time) {
-  const dt = (time - lastTime) / 1000; // реальная дельта в секундах
-  lastTime = time;
-
+function loop() {
   ctx.clearRect(0, 0, c.width, c.height);
 
   // Фон
@@ -125,34 +119,12 @@ function loop(time) {
 
   charSize = Math.min(c.width * 0.25, c.height * 0.25);
 
-  if (!gameOver) {
-    const progress = Math.min(height / playableHeight, 1);
-
-    const gravity = GRAVITY_BASE + GRAVITY_INCREASE * progress;
-
-    const drag = AIR_RESISTANCE * velocity * Math.abs(velocity);
-
-    velocity -= gravity * 60 * dt;                 // гравитация
-    velocity -= drag * Math.sign(velocity) * 60 * dt; // сопротивление
-
-    height += velocity * dt;
-
-    if (height < 0) {
-      height = 0;
-      velocity = 0;
-      if (score > 0) {
-        gameOver = true;
-        saveRecords();
-      }
-    }
-    if (height > playableHeight) {
-      height = playableHeight;
-      velocity = Math.min(velocity, 0);
-    }
-
-    score = Math.round((height / playableHeight) * MAX_SCORE);
+  // Если не тапать — объект остаётся на месте (нет падения)
+  if (!gameOver && height <= 0) {
+    height = 0;
   }
 
+  // Y персонажа
   const y = c.height - BOTTOM_OFFSET * c.height - height - charSize;
 
   if (charImg.complete) {
@@ -160,6 +132,7 @@ function loop(time) {
     ctx.drawImage(charImg, x, y, charSize, charSize);
   }
 
+  // Счёт
   ctx.fillStyle = "#000";
   ctx.font = "bold 30px sans-serif";
   ctx.textAlign = "center";
@@ -179,9 +152,7 @@ function loop(time) {
 }
 
 function startIfReady() {
-  if (bgImg.complete && charImg.complete) {
-    requestAnimationFrame(loop);
-  }
+  if (bgImg.complete && charImg.complete) loop();
 }
 bgImg.onload = startIfReady;
 charImg.onload = startIfReady;
