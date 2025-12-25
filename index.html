@@ -24,13 +24,15 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Константы баланса (настроены для казуального геймплея)
-const MAX_BOOST = 10;                  // максимальный импульс за тап внизу
-const MIN_BOOST = 2;                   // минимальный импульс за тап наверху
-const DOWNWARD_DRIFT = 0.1;            // лёгкое смещение вниз (имитация гравитации)
-const BOTTOM_OFFSET = 0.0;             // отступ снизу (доля высоты экрана)
-const TOP_OFFSET = 0.0;                // отступ сверху (доля высоты экрана)
-const MAX_SCORE = 1000000;             // максимальный счёт
+// Константы баланса (казуальный и правдоподобный)
+const BASE_BOOST = 18;                 // базовый импульс вверх за тап (внизу)
+const BOOST_REDUCTION_FACTOR = 0.8;    // коэффициент уменьшения импульса на высоте (0.8 = импульс падает до 20% на верху)
+const GRAVITY_BASE = 0.4;              // базовая гравитация
+const GRAVITY_INCREASE = 1.2;          // гравитация растёт до (BASE + INCREASE) на верху
+const AIR_RESISTANCE = 0.02;           // сопротивление воздуха (замедляет скорость)
+const BOTTOM_OFFSET = 0.05;            // отступ снизу (5%)
+const TOP_OFFSET = 0.05;                // отступ сверху (5%)
+const MAX_SCORE = 1000000;
 
 // Изображения
 const bgImg = new Image();
@@ -43,19 +45,22 @@ const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 const list = document.getElementById("list");
 
-let position = 0;      // 0 = низ, 1 = верх игровой зоны
+let height = 0;        // текущая высота в пикселях (от низа игровой зоны)
+let velocity = 0;      // текущая скорость (положительная — вверх)
 let score = 0;
 let gameOver = false;
-let charSize = 0;      // будет вычисляться каждый кадр
+let charSize = 0;
+let playableHeight = 0; // высота игровой зоны
 
 function resize() {
   c.width = window.innerWidth;
   c.height = window.innerHeight;
+  playableHeight = c.height * (1 - BOTTOM_OFFSET - TOP_OFFSET);
 }
 window.onresize = resize;
 resize();
 
-// Сброс рекордов при каждом запуске страницы
+// Сброс рекордов
 localStorage.removeItem("liftRecords");
 
 let records = [];
@@ -81,23 +86,27 @@ function saveRecords() {
 function tap(e) {
   e.preventDefault();
   if (gameOver) {
-    position = 0;
+    height = 0;
+    velocity = 0;
     score = 0;
     gameOver = false;
   } else {
-    // Импульс уменьшается линейно от MAX_BOOST до MIN_BOOST
-    const boost = MAX_BOOST - (MAX_BOOST - MIN_BOOST) * position;
-    position += boost / c.height; // нормализуем под высоту экрана
+    // Прогрессивное уменьшение импульса с высотой
+    const progress = height / playableHeight;
+    const boost = BASE_BOOST * (1 - BOOST_REDUCTION_FACTOR * progress);
+    velocity += boost;
   }
 }
 
 c.onclick = tap;
 c.ontouchstart = tap;
 
+const DT = 1/60; // фиксированная дельта времени для стабильной физики
+
 function loop() {
   ctx.clearRect(0, 0, c.width, c.height);
 
-  // Рисуем фон (центрированный)
+  // Фон
   if (bgImg.complete) {
     const bgRatio = bgImg.naturalWidth / bgImg.naturalHeight || 1;
     const canvasRatio = c.width / c.height;
@@ -114,44 +123,52 @@ function loop() {
     ctx.drawImage(bgImg, bx, by, bw, bh);
   }
 
-  // Размер персонажа
   charSize = Math.min(c.width * 0.25, c.height * 0.25);
 
   if (!gameOver) {
-    // Постоянное смещение вниз
-    position -= DOWNWARD_DRIFT * 0.016; // стабильная дельта времени ≈60fps
+    const progress = height / playableHeight;
 
-    if (position < 0) {
-      position = 0;
+    // Гравитация растёт с высотой
+    const gravity = GRAVITY_BASE + GRAVITY_INCREASE * progress;
+
+    // Сопротивление воздуха (пропорционально скорости² для реализма)
+    const drag = AIR_RESISTANCE * velocity * Math.abs(velocity);
+
+    velocity -= gravity * DT * 60;       // гравитация вниз
+    velocity -= drag * Math.sign(velocity) * DT * 60; // сопротивление
+
+    height += velocity * DT;
+
+    if (height < 0) {
+      height = 0;
+      velocity = 0;
       if (score > 0) {
         gameOver = true;
         saveRecords();
       }
     }
-    if (position > 1) {
-      position = 1;
+    if (height > playableHeight) {
+      height = playableHeight;
+      velocity = Math.min(velocity, 0);
     }
 
-    score = Math.round(position * MAX_SCORE);
+    score = Math.round((height / playableHeight) * MAX_SCORE);
   }
 
-  // Позиция персонажа
-  const playableHeight = c.height * (1 - BOTTOM_OFFSET - TOP_OFFSET);
-  const y = c.height - BOTTOM_OFFSET * c.height - position * playableHeight - charSize;
+  // Y персонажа
+  const y = c.height - BOTTOM_OFFSET * c.height - height - charSize;
 
-  // Рисуем персонажа
   if (charImg.complete) {
     const x = c.width / 2 - charSize / 2;
     ctx.drawImage(charImg, x, y, charSize, charSize);
   }
 
-  // Текущий счёт
+  // Счёт
   ctx.fillStyle = "#000";
   ctx.font = "bold 30px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(score.toLocaleString() + " очков", c.width / 2, 60);
 
-  // Экран окончания игры
   if (gameOver) {
     ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.fillRect(0, c.height / 2 - 60, c.width, 120);
@@ -166,9 +183,7 @@ function loop() {
 }
 
 function startIfReady() {
-  if (bgImg.complete && charImg.complete) {
-    loop();
-  }
+  if (bgImg.complete && charImg.complete) loop();
 }
 bgImg.onload = startIfReady;
 charImg.onload = startIfReady;
