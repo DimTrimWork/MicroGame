@@ -24,14 +24,13 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Константы баланса — легко настраивать
-const BASE_BOOST = 14;          // базовый импульс на тап внизу
-const MIN_BOOST = 4;            // минимальный импульс (на верху)
-const BOOST_REDUCTION_HEIGHT = 0.6; // на какой доле высоты экрана начинается сильное снижение (0.5 = половина)
-const GRAVITY = 0.55;           // гравитация (чем больше — тем быстрее падает)
-const FAST_TAP_TIME = 300;      // ms — если тап быстрее, бонус
-const FAST_TAP_BONUS = 4;       // дополнительный импульс за быстрый тап
-const MAX_SCORE = 1000000;      // очков за полный верх экрана
+// Константы баланса
+const FIXED_BOOST = 12;                 // фиксированный импульс за каждый тап
+const BASE_GRAVITY = 0.3;               // базовая гравитация внизу
+const MAX_GRAVITY = 1.8;                // максимальная гравитация наверху
+const BOTTOM_OFFSET = 0.1;              // отступ снизу (доля высоты экрана, где персонаж стартует)
+const TOP_OFFSET = 0.1;                 // отступ сверху (доля высоты экрана, где максимум)
+const MAX_SCORE = 1000000;              // очков за достижение верха отрезка
 
 // Изображения
 const bgImg = new Image();
@@ -44,8 +43,10 @@ const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 const list = document.getElementById("list");
 
-let height = 0, velocity = 0, score = 0, gameOver = false;
-let lastTap = 0;
+let position = 0;       // 0 = низ отрезка, 1 = верх отрезка
+let velocity = 0;
+let score = 0;
+let gameOver = false;
 
 function resize() {
   c.width = window.innerWidth;
@@ -53,6 +54,12 @@ function resize() {
 }
 window.onresize = resize;
 resize();
+
+// Вычисляем реальные координаты
+function getY() {
+  const playableHeight = c.height * (1 - BOTTOM_OFFSET - TOP_OFFSET);
+  return c.height - BOTTOM_OFFSET * c.height - position * playableHeight - charSize;
+}
 
 let records = [];
 function loadRecords() {
@@ -86,25 +93,9 @@ function saveRecords() {
 function tap(e) {
   e.preventDefault();
   if (gameOver) {
-    height = 0; velocity = 0; score = 0; gameOver = false;
+    position = 0; velocity = 0; score = 0; gameOver = false;
   } else {
-    const now = Date.now();
-    const timeDiff = now - lastTap;
-    lastTap = now;
-
-    // Прогрессивное снижение импульса: уже на половине пути ощутимо сложнее
-    const progress = height / c.height;
-    let boost = BASE_BOOST;
-    if (progress > BOOST_REDUCTION_HEIGHT) {
-      const factor = (progress - BOOST_REDUCTION_HEIGHT) / (1 - BOOST_REDUCTION_HEIGHT);
-      boost = BASE_BOOST - (BASE_BOOST - MIN_BOOST) * factor;
-    }
-    boost = Math.max(boost, MIN_BOOST);
-
-    // Бонус за быстрые тапы (становится важнее на высоте)
-    if (timeDiff < FAST_TAP_TIME) boost += FAST_TAP_BONUS;
-
-    velocity += boost;
+    velocity += FIXED_BOOST;
   }
 }
 
@@ -130,25 +121,28 @@ function loop() {
   ctx.drawImage(bgImg, bx, by, bw, bh);
   
   if (!gameOver) {
-    velocity -= GRAVITY;
-    height += velocity;
+    // Гравитация растёт линейно от BASE_GRAVITY до MAX_GRAVITY по мере подъёма
+    const currentGravity = BASE_GRAVITY + (MAX_GRAVITY - BASE_GRAVITY) * position;
+    velocity -= currentGravity;
+    position += velocity / c.height;   // нормализуем скорость под высоту экрана
     
-    if (height < 0) {
-      height = 0;
+    if (position < 0) {
+      position = 0;
       velocity = 0;
       if (score > 0) {
         gameOver = true;
         saveRecords();
       }
     }
+    if (position > 1) position = 1;   // не вылететь за верх
     
-    score = Math.round((height / c.height) * MAX_SCORE);
+    score = Math.round(position * MAX_SCORE);
   }
   
-  // Объект
+  // Персонаж
   const charSize = Math.min(c.width * 0.25, c.height * 0.25);
   const x = c.width / 2 - charSize / 2;
-  const y = c.height - height - charSize;
+  const y = getY();
   ctx.drawImage(charImg, x, y, charSize, charSize);
   
   // Счёт
@@ -170,7 +164,6 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// Запуск после загрузки изображений
 function startLoop() {
   if (bgImg.complete && charImg.complete) loop();
 }
