@@ -24,10 +24,10 @@ li{margin:2px 0;}
 </div>
 
 <script>
-// Константы баланса
-const MAX_BOOST = 4;                   // максимальный импульс за тап внизу
-const MIN_BOOST = 0.8;                 // минимальный импульс за тап наверху
-const DOWNWARD_DRIFT = 0.5;            // постоянное смещение вниз (имитация гравитации)
+// Константы баланса (настроены для казуального геймплея)
+const MAX_BOOST = 10;                  // максимальный импульс за тап внизу
+const MIN_BOOST = 2;                   // минимальный импульс за тап наверху
+const DOWNWARD_DRIFT = 0.1;            // лёгкое смещение вниз (имитация гравитации)
 const BOTTOM_OFFSET = 0.0;             // отступ снизу (доля высоты экрана)
 const TOP_OFFSET = 0.0;                // отступ сверху (доля высоты экрана)
 const MAX_SCORE = 1000000;             // максимальный счёт
@@ -85,7 +85,7 @@ function tap(e) {
     score = 0;
     gameOver = false;
   } else {
-    // Импульс уменьшается линейно от MAX_BOOST до MIN_BOOST по мере подъёма
+    // Импульс уменьшается линейно от MAX_BOOST до MIN_BOOST
     const boost = MAX_BOOST - (MAX_BOOST - MIN_BOOST) * position;
     position += boost / c.height; // нормализуем под высоту экрана
   }
@@ -118,7 +118,7 @@ function loop() {
   charSize = Math.min(c.width * 0.25, c.height * 0.25);
 
   if (!gameOver) {
-    // Постоянное смещение вниз (имитация гравитации)
+    // Постоянное смещение вниз
     position -= DOWNWARD_DRIFT * 0.016; // стабильная дельта времени ≈60fps
 
     if (position < 0) {
@@ -178,4 +178,3 @@ showRecords();
 </script>
 </body>
 </html>
-
