@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Подними выше!</title>
+<style>
+body,html{margin:0;padding:0;height:100%;overflow:hidden;background:#fff;}
+#game{display:flex;flex-direction:column;height:100%;position:relative;}
+canvas{width:100%;flex:1;}
+#records{position:absolute;top:10px;right:10px;color:#000;font-family:sans-serif;font-size:14px;background:rgba(255,255,255,0.7);padding:8px;border-radius:8px;max-height:90%;overflow-y:auto;}
+h2{margin:0 0 5px 0;font-size:16px;}
+ul{margin:0;padding-left:15px;list-style:none;}
+li{margin:2px 0;}
+</style>
+</head>
+<body>
+<div id="game">
+<canvas id="c"></canvas>
+<div id="records">
+<h2>Рекорды</h2>
+<ul id="list"></ul>
+</div>
+</div>
+
+<script>
+// Константы баланса — легко настраивать
+const BASE_BOOST = 14;          // базовый импульс на тап внизу
+const MIN_BOOST = 4;            // минимальный импульс (на верху)
+const BOOST_REDUCTION_HEIGHT = 0.6; // на какой доле высоты экрана начинается сильное снижение (0.5 = половина)
+const GRAVITY = 0.55;           // гравитация (чем больше — тем быстрее падает)
+const FAST_TAP_TIME = 300;      // ms — если тап быстрее, бонус
+const FAST_TAP_BONUS = 4;       // дополнительный импульс за быстрый тап
+const MAX_SCORE = 1000000;      // очков за полный верх экрана
+
+// Изображения
+const bgImg = new Image();
+bgImg.src = "bg.png";
+
+const charImg = new Image();
+charImg.src = "char.png";
+
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const list = document.getElementById("list");
+
+let height = 0, velocity = 0, score = 0, gameOver = false;
+let lastTap = 0;
+
+function resize() {
+  c.width = window.innerWidth;
+  c.height = window.innerHeight;
+}
+window.onresize = resize;
+resize();
+
+let records = [];
+function loadRecords() {
+  const rec = localStorage.getItem("liftRecords");
+  if (rec) {
+    records = JSON.parse(rec);
+    showRecords();
+  }
+}
+loadRecords();
+
+function showRecords() {
+  list.innerHTML = "";
+  records.slice(0,10).forEach(r => {
+    const li = document.createElement("li");
+    li.textContent = (r/1000).toFixed(0) + "к";
+    list.appendChild(li);
+  });
+}
+
+function saveRecords() {
+  if (score > 0) {
+    records.push(score);
+    records.sort((a,b)=>b-a);
+    records = records.slice(0,10);
+    localStorage.setItem("liftRecords", JSON.stringify(records));
+    showRecords();
+  }
+}
+
+function tap(e) {
+  e.preventDefault();
+  if (gameOver) {
+    height = 0; velocity = 0; score = 0; gameOver = false;
+  } else {
+    const now = Date.now();
+    const timeDiff = now - lastTap;
+    lastTap = now;
+
+    // Прогрессивное снижение импульса: уже на половине пути ощутимо сложнее
+    const progress = height / c.height;
+    let boost = BASE_BOOST;
+    if (progress > BOOST_REDUCTION_HEIGHT) {
+      const factor = (progress - BOOST_REDUCTION_HEIGHT) / (1 - BOOST_REDUCTION_HEIGHT);
+      boost = BASE_BOOST - (BASE_BOOST - MIN_BOOST) * factor;
+    }
+    boost = Math.max(boost, MIN_BOOST);
+
+    // Бонус за быстрые тапы (становится важнее на высоте)
+    if (timeDiff < FAST_TAP_TIME) boost += FAST_TAP_BONUS;
+
+    velocity += boost;
+  }
+}
+
+c.onclick = tap;
+c.ontouchstart = tap;
+
+function loop() {
+  ctx.clearRect(0,0,c.width,c.height);
+  
+  // Фон центрирован
+  const bgRatio = bgImg.naturalWidth / bgImg.naturalHeight || 1;
+  const canvasRatio = c.width / c.height;
+  let bw, bh, bx = 0, by = 0;
+  if (bgRatio > canvasRatio) {
+    bw = c.width;
+    bh = c.width / bgRatio;
+    by = (c.height - bh) / 2;
+  } else {
+    bh = c.height;
+    bw = c.height * bgRatio;
+    bx = (c.width - bw) / 2;
+  }
+  ctx.drawImage(bgImg, bx, by, bw, bh);
+  
+  if (!gameOver) {
+    velocity -= GRAVITY;
+    height += velocity;
+    
+    if (height < 0) {
+      height = 0;
+      velocity = 0;
+      if (score > 0) {
+        gameOver = true;
+        saveRecords();
+      }
+    }
+    
+    score = Math.round((height / c.height) * MAX_SCORE);
+  }
+  
+  // Объект
+  const charSize = Math.min(c.width * 0.25, c.height * 0.25);
+  const x = c.width / 2 - charSize / 2;
+  const y = c.height - height - charSize;
+  ctx.drawImage(charImg, x, y, charSize, charSize);
+  
+  // Счёт
+  ctx.fillStyle = "#000";
+  ctx.font = "bold 30px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(score.toLocaleString() + " очков", c.width/2, 60);
+  
+  if (gameOver) {
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillRect(0, c.height/2 - 60, c.width, 120);
+    ctx.fillStyle = "#000";
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillText("Игра окончена", c.width/2, c.height/2 - 10);
+    ctx.font = "24px sans-serif";
+    ctx.fillText("Тапните для рестарта", c.width/2, c.height/2 + 30);
+  }
+  
+  requestAnimationFrame(loop);
+}
+
+// Запуск после загрузки изображений
+function startLoop() {
+  if (bgImg.complete && charImg.complete) loop();
+}
+bgImg.onload = startLoop;
+charImg.onload = startLoop;
+if (bgImg.complete && charImg.complete) startLoop();
+
+showRecords();
+</script>
+</body>
+</html>
